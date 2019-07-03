@@ -1,22 +1,23 @@
 #include "std_lib_facilities.h"
+#include <cstdint>
 
 using namespace std;
 
-bool isPrime(int n) {
+bool isPrime(int_fast64_t n) {
     for (int i = 2; i*i <= n; i+=2) {
         if (n % i == 0) return false;
     }
     return true;
 }
 
-vector<int>& primes() {
-    static vector<int> out_primes;
+vector<int_fast64_t>& primes() {
+    static vector<int_fast64_t> out_primes;
     if (out_primes.size() > 0) return out_primes;
-    int max_integer = 1 << 20;
+    int_fast64_t max_integer = 1 << 20;
     out_primes.push_back(2);
     for (int i = 3; i < max_integer; i+=2) {
         bool isPrime = true;
-        for (int& prime : out_primes) {
+        for (int_fast64_t& prime : out_primes) {
             if (i % prime == 0) {
                 isPrime = false;
                 break;
@@ -33,25 +34,25 @@ vector<int>& primes() {
 class Rational {
     public:
         Rational();
-        Rational(int n, int d);
-        Rational(int n);
-        int nom() const {return top;}
-        int denom() const {return bot;}
+        Rational(int_fast64_t n, int_fast64_t d);
+        Rational(int_fast64_t n);
+        int_fast64_t nom() const {return top;}
+        int_fast64_t denom() const {return bot;}
         double to_double() const {return double(top) / bot;}
         void simplify();
     private:
-        int top{0};
-        int bot{1};
+        int_fast64_t top{0};
+        int_fast64_t bot{1};
 };
 
 Rational::Rational() : top{0}, bot{1} {}
-Rational::Rational(int n) : top{n}, bot{1} {}
-Rational::Rational(int n, int d) : top{n}, bot{d} {}
+Rational::Rational(int_fast64_t n) : top{n}, bot{1} {}
+Rational::Rational(int_fast64_t n, int_fast64_t d) : top{n}, bot{d} {}
 void Rational::simplify() {
-    int top_copy = top;
-    int bot_copy = bot;
-    vector<int> top_primes;
-    for (int& prime : primes()) {
+    int_fast64_t top_copy = top;
+    int_fast64_t bot_copy = bot;
+    vector<int_fast64_t> top_primes;
+    for (int_fast64_t& prime : primes()) {
         if (prime * prime > top_copy && prime * prime > bot_copy)
             break;
         if (top_copy % prime == 0) {
@@ -60,13 +61,17 @@ void Rational::simplify() {
             while (top_copy % prime == 0);
         }
     }
-    for (int& top_prime : top_primes) {
+    for (int_fast64_t& top_prime : top_primes) {
         if (top_prime * top_prime > top && top_prime * top_prime > bot)
             break;
         while (top % top_prime == 0 && bot % top_prime == 0) {
             top /= top_prime;
             bot /= top_prime;
         }
+    }
+    if (bot < 0) {
+        bot = -bot;
+        top = -top;
     }
 }
 
@@ -99,11 +104,30 @@ Rational operator-(const Rational& a) {
     return negated;
 }
 
-Rational pow(const Rational& a, int n) {
-    if (n < 0) return Rational{1,1} / pow(a, -n);
-    if (n == 0) return Rational{1,1};
-    if (n % 2 == 0) return pow(a*a, n/2);
-    return Rational{n,1} * pow(a,n-1);
+// inline int sqr(const int& a) {
+//     return a*a;
+// }
+
+// int myPow(int a, int n) {
+//     if (n == 0) return 1;
+//     if (n % 2 == 0) return sqr(pow(a,n/2));
+//     return a * pow(a,n-1);
+// }
+
+// Rational pow(const Rational& a, const Rational& n) {
+//     if (n.denom() != 1) error("Non-integer pow!", n.nom());
+//     int n_int = n.nom();
+//     return Rational{myPow(a.nom(), n_int), myPow(a.denom(), n_int)};
+// }
+
+Rational pow(const Rational& a, const Rational& n) {
+    if (n.denom() != 1) error("Non-integer pow");
+    int_fast64_t n_int = n.nom();
+    Rational result{1,1};
+    for (int i = 0; i < n_int; i++) {
+        result = result * a;
+    }
+    return result;
 }
 
 ostream& operator<<(ostream& os, Rational a) {
@@ -114,7 +138,7 @@ ostream& operator<<(ostream& os, Rational a) {
 }
 
 istream& operator>>(istream& is, Rational& a) {
-    int nom{0}, denom{1};
+    int_fast64_t nom{0}, denom{1};
     char op;
     
     cin >> nom;
@@ -186,7 +210,7 @@ Token Token_stream::get() {
             return Token{rational,a};
         }
         case '+': case '-': case '*': case '/':
-        case '(': case ')':
+        case '(': case ')': case '^':
             return Token{ch};
         case print:
             return Token{print};
@@ -210,11 +234,15 @@ Rational primary(Token_stream& ts) {
     Token t = ts.get();
     switch (t.kind) {
         case rational:
+        {
             Token next = ts.get();
             if (next.kind == '^') {
                 return pow(t.value, primary(ts));
+            } else {
+                ts.put_back(next);
             }
             return t.value;
+        }
         case '-':
             return -primary(ts);
         case '+':
@@ -223,6 +251,12 @@ Rational primary(Token_stream& ts) {
         {
             Rational val = expression(ts);
             if (ts.get().kind != ')') error(") expected in primary");
+            Token next = ts.get();
+            if (next.kind == '^') {
+                return pow(val, primary(ts));
+            } else {
+                ts.put_back(next);
+            }
             return val;
         }
         default:
